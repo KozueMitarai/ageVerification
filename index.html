@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>年齢確認シミュレーター</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+            width: 100%;
+            max-width: 500px;
+        }
+        .id-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto 20px;
+        }
+        .id-image {
+            width: 100%;
+            height: auto;
+        }
+        .birthdate {
+            position: absolute;
+            font-weight: bold;
+            color: black;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;  /* 追加: テキストを1行に強制 */
+            text-align: left;     /* 追加: テキストを左揃えに */
+        }
+        .id-type {
+            margin-bottom: 10px;
+            font-weight: bold;
+            font-size: 18px;
+            color: #333;
+        }
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        #feedback {
+            margin-top: 20px;
+            font-weight: bold;
+        }
+        #next-button {
+            display: none;
+        }
+        .citation {
+            font-size: 12px;
+            margin-top: 20px;
+            text-align: left;
+        }
+        @media (max-width: 600px) {
+            .container {
+                padding: 10px;
+            }
+            button {
+                padding: 8px 16px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>年齢確認シミュレーター</h1>
+        <div id="id-type" class="id-type"></div>
+        <div class="id-container">
+            <img id="id-image" class="id-image" src="" alt="ID Template">
+            <div id="birthdate" class="birthdate"></div>
+        </div>
+        <button id="under-18-button" onclick="verify(true)">18歳未満</button>
+        <button id="over-18-button" onclick="verify(false)">18歳以上</button>
+        <div id="feedback"></div>
+        <div id="age-display"></div> <!-- Add age display div -->
+        <div id="score"></div>
+        <button id="next-button" onclick="nextQuestion()">次へ</button>
+        <div class="citation">
+            画像引用元:<br>
+            マイナンバーカード：<a href="https://frame-illust.com/?p=9284" target="_blank">frame-illust.com</a><br>
+            免許証：<a href="https://www.ac-illust.com/main/detail.php?id=2521249" target="_blank">ac-illust.com</a><br>
+            保険証：<a href="https://www.ac-illust.com/main/detail.php?id=22328905" target="_blank">ac-illust.com</a>
+        </div>
+    </div>
+
+    <script>
+        let currentId = null;
+        let score = 0;
+        let attempts = 0;
+        const today = new Date();
+
+        const idTypes = [
+            { name: '運転免許証', template: 'menkyo.png', x: 1560, y: 129, aspectRatio: 1.59, fontSize: 60 },
+            { name: '保険証', template: 'hoken.png', x: 260, y: 162, aspectRatio: 1.42, fontSize: 20 },
+            { name: 'マイナンバーカード', template: 'mynum.png', x: 300, y: 141, aspectRatio: 1.59, fontSize: 16 }
+        ];
+
+        function weightedRandomAge() {
+            const currentYear = today.getFullYear();
+            const minAge = 16;
+            const maxAge = 80;
+            const targetAge = 18;
+            const spreadFactor = 5;
+
+            let age;
+            do {
+                const u = Math.random();
+                const v = Math.random();
+                const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+                age = Math.round(targetAge + spreadFactor * z);
+            } while (age < minAge || age > maxAge);
+
+            // 10%の確率で、より広い範囲から年齢を選択
+            if (Math.random() < 0.1) {
+                age = Math.floor(Math.random() * (maxAge - minAge + 1)) + minAge;
+            }
+
+            return age;
+        }
+
+        function generateRandomBirthdate() {
+            const age = weightedRandomAge();
+            const birthYear = today.getFullYear() - age;
+            const birthDate = new Date(birthYear, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1);
+            
+            // 昭和開始日より前の場合は、昭和元年の1月1日にする
+            if (birthDate < new Date(1926, 11, 25)) {
+                birthDate.setFullYear(1927, 0, 1);
+            }
+            
+            return birthDate;
+        }
+
+        function getJapaneseEra(date) {
+            const eraStartDates = [
+                { name: '令和', start: new Date(2019, 4, 1) },
+                { name: '平成', start: new Date(1989, 0, 8) },
+                { name: '昭和', start: new Date(1926, 11, 25) }
+            ];
+
+            for (let era of eraStartDates) {
+                if (date >= era.start) {
+                    const yearInEra = date.getFullYear() - era.start.getFullYear() + 1;
+                    return `${era.name}${yearInEra === 1 ? '元' : yearInEra}`;
+                }
+            }
+            return '不明';
+        }
+
+        function formatJapaneseDate(date) {
+            const era = getJapaneseEra(date);
+            return `${era}年${date.getMonth() + 1}月${date.getDate()}日`;
+        }
+
+        function updateDisplay() {
+            currentId = {
+                type: idTypes[Math.floor(Math.random() * idTypes.length)],
+                birthDate: generateRandomBirthdate()
+            };
+
+            const idImage = document.getElementById('id-image');
+            idImage.src = currentId.type.template;
+
+            const idTypeElement = document.getElementById('id-type');
+            idTypeElement.textContent = currentId.type.name;
+
+            const birthDateElement = document.getElementById('birthdate');
+            birthDateElement.textContent = formatJapaneseDate(currentId.birthDate);
+            birthDateElement.style.fontSize = `${currentId.type.fontSize}px`;
+
+            idImage.onload = function() {
+                const containerWidth = document.querySelector('.id-container').offsetWidth;
+                const scaleFactor = containerWidth / idImage.naturalWidth;
+
+                birthDateElement.style.left = `${currentId.type.x * scaleFactor}px`;
+                birthDateElement.style.top = `${currentId.type.y * scaleFactor}px`;
+
+                // フォントサイズの動的調整
+                let fontSize = currentId.type.fontSize;
+                birthDateElement.style.fontSize = `${fontSize * scaleFactor}px`;
+
+                while (birthDateElement.offsetWidth > containerWidth * 0.35 && fontSize > 8) {
+                    fontSize -= 0.5;
+                    birthDateElement.style.fontSize = `${fontSize * scaleFactor}px`;
+                }
+            };
+
+            document.getElementById('feedback').textContent = '';
+            document.getElementById('next-button').style.display = 'none';
+            document.getElementById('age-display').style.display = 'none'; // Hide the age display element
+            document.getElementById('under-18-button').disabled = false; // Enable the buttons
+            document.getElementById('over-18-button').disabled = false; // Enable the buttons
+        }
+
+        function calculateAge(birthDate) {
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDifference = today.getMonth() - birthDate.getMonth();
+            const dayDifference = today.getDate() - birthDate.getDate();
+            if (monthDifference < 0 || (monthDifference === 0 && dayDifference < 0)) {
+                age--;
+            }
+            return age;
+        }
+
+        function verify(isUnder18) {
+            const age = calculateAge(currentId.birthDate);
+            const isCorrect = (isUnder18 && age < 18) || (!isUnder18 && age >= 18);
+            score += isCorrect ? 1 : 0;
+            attempts++;
+
+            const feedbackElement = document.getElementById('feedback');
+            feedbackElement.textContent = isCorrect ? '正解です！' : '不正解です。';
+            feedbackElement.style.color = isCorrect ? 'green' : 'red';
+
+            const ageText = age >= 18 ? '18歳以上' : '18歳未満';
+            document.getElementById('age-display').textContent = `年齢: ${age}歳 (${ageText})`;
+            document.getElementById('score').textContent = `スコア: ${score}/${attempts} (正答率: ${Math.round((score / attempts) * 100)}%)`;
+            document.getElementById('next-button').style.display = 'inline-block';
+            document.getElementById('age-display').style.display = 'block'; // Show the age display element
+            
+            document.getElementById('under-18-button').disabled = true; // Disable the buttons
+            document.getElementById('over-18-button').disabled = true; // Disable the buttons
+        }
+
+        function nextQuestion() {
+            updateDisplay();
+        }
+
+        updateDisplay();
+
+        window.addEventListener('resize', updateDisplay);
+    </script>
+</body>
+</html>
